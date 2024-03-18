@@ -1,0 +1,369 @@
+import pandas as pd
+import numpy as np
+import seaborn as sns
+
+import plotly.express as px
+import plotly.graph_objects as go
+
+
+
+
+
+### Reading and Labelling Data 
+
+df_source = pd.read_csv('data9.csv', sep = ',')
+
+df_source.columns
+
+factors = ['oral_comprehension', 'oral_expression',
+       'fluency_of_ideas', 'originality', 'problem_sensitivity',
+       'deductive_reasoning', 'information_ordering', 'mathematical_reasoning',
+       'perceptual_speed', 'visualization', 'selective_attention',
+       'time_sharing', 'arm_hand_steadiness', 'finger_dexterity',
+       'multilimb_coordination', 'response_orientation', 'rate_control',
+       'reaction_time', 'wrist_finger_speed', 'speed_of_limb_movement',
+       'stamina', 'extent_flexibility', 'dynamic_flexibility',
+       'sound_localization', 'speech_clarity']
+
+mask  =  df_source.label_ML.isna()
+
+df_train = df_source[~mask]
+df_train = df_train.reset_index()
+
+df_test = df_source[mask]
+df_test = df_test.reset_index()
+
+X = df_source[factors]
+
+
+### Scaling and Features Celection 
+
+from sklearn.preprocessing import StandardScaler
+
+
+scaler = StandardScaler()
+scaler.fit(X)
+
+
+X_tr = scaler.transform(X[~mask])
+X_test = scaler.transform(X[mask])
+y = df_train.label_ML
+
+pd.DataFrame(X_tr).corr()
+
+pd.DataFrame(X_test).corr()
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+sns.pairplot(df_source[factors]);
+
+
+
+### Classification
+
+from sklearn.svm import SVC
+from sklearn.naive_bayes import BernoulliNB
+from sklearn.naive_bayes import GaussianNB
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.tree import DecisionTreeClassifier
+
+from sklearn.model_selection import train_test_split, StratifiedKFold
+from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import cross_val_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import accuracy_score
+
+
+import xgboost as xgb
+
+# Gaussian classifiers
+from sklearn.gaussian_process.kernels import (RationalQuadratic,
+            Exponentiation)
+from sklearn.gaussian_process import GaussianProcessClassifier
+from sklearn.gaussian_process import GaussianProcessRegressor
+
+from sklearn.metrics import confusion_matrix
+import itertools
+from sklearn.metrics import roc_auc_score
+
+# list of classificators
+tree = DecisionTreeClassifier()
+forest = RandomForestClassifier()
+svc = SVC()
+knn = KNeighborsClassifier()
+
+gnb = GaussianNB()
+
+kernelRat = RationalQuadratic(length_scale=1.0, alpha=1.5)
+gnbRat = GaussianProcessClassifier(kernel=kernelRat)
+
+kernelExp = Exponentiation(RationalQuadratic(), exponent=2)
+gnbExp = GaussianProcessClassifier(kernel=kernelExp)
+
+lr = LogisticRegression()
+knn_reg = KNeighborsRegressor()
+
+# alg parameters
+
+forest_params = {'max_depth': range(2,8),
+                 'max_features': range(2,5, 1),
+                 'n_estimators': range(3,8),
+                'class_weight' : [{0: 1, 1: 1}, {0: 1, 1: 1.5}, {0: 1, 1: 2}]} 
+
+tree_params = {'max_depth': range(2,8),
+               'max_features': range(2, 5),
+               'min_samples_leaf': [25],
+               'class_weight' : [{0: 1, 1: 1}, {0: 1, 1: 1.5}, {0: 1, 1: 2}]}
+svc_params = [
+    {'C': [1, 10], 'kernel': ['linear']},
+    {'C': [1, 10], 'gamma': [0.001, 0.0001], 'kernel': ['rbf']}]
+
+knn_params = dict(n_neighbors=range(50, 150, 10))
+
+# regr parametersd
+lr_params = {'penalty': ['l1','l2'],
+             'tol': [0.01, 0.02, 0.03, 0.04, 0.05]}
+
+
+# Grids
+seed = 5
+lr_grid = GridSearchCV(lr, lr_params, cv=seed, verbose=True)
+tree_grid = GridSearchCV(tree, 
+                         tree_params,
+                         cv=seed, verbose=True)
+forest_grid = GridSearchCV(forest, forest_params,
+                           cv=seed, verbose=True)
+svc_grid = GridSearchCV(svc, svc_params,
+                        cv=seed, verbose=True)
+knn_grid = GridSearchCV(knn, knn_params, cv=1, verbose=True)
+
+knn_reg_grid = GridSearchCV(knn_reg, knn_params,  cv=2, verbose=True)
+
+
+
+## Trees
+
+%%time
+tree_grid.fit(X_tr, y)
+print("Desicion Tree: ")
+print(tree_grid.best_params_, tree_grid.best_score_)
+print(tree_grid.best_estimator_)
+
+tree_grid.best_estimator_
+
+
+
+## Forest
+
+%%time
+forest_grid.fit(X_tr, y)
+print ("Forest: ")
+print(forest_grid.best_params_, forest_grid.best_score_)
+print(forest_grid.best_estimator_)
+
+## Nayve Baysian (Gauss)
+
+%%time
+gnb.fit(X_tr, y)
+
+gnbExp.fit(X_tr, y)
+
+
+gnbRat.fit(X_tr, y)
+
+## Logistic Regr
+
+%%time
+lr_grid.fit(X_tr, y)
+print("LogReg: ")
+print(lr_grid.best_params_, lr_grid.best_score_)
+print(lr_grid.best_estimator_)
+
+## K-NN
+
+%%time
+kNN_num = 10
+from sklearn.neighbors import KNeighborsClassifier
+neigh = KNeighborsClassifier(n_neighbors=kNN_num)
+neigh.fit(X_tr, y) 
+
+## xgBoost
+
+%%time
+xgb_grid.fit(X_tr, y)
+print("XGB: ")
+print(xgb_grid.best_params_, xgb_grid.best_score_)
+print(xgb_grid.best_estimator_)
+
+## NuSVM
+
+%%time
+from sklearn.svm import SVR
+clf = SVR(C=1.0, epsilon=0.2)
+clf.fit(X_tr, y)
+
+
+
+
+
+
+
+
+
+
+
+## Reports
+
+%%time
+proba_train = pd.DataFrame({
+    "KNN": neigh.predict_proba(X_tr)[:,1]
+    , "Tree": tree_grid.best_estimator_.predict_proba(X_tr)[:,1]
+    , "Forest": forest_grid.best_estimator_.predict_proba(X_tr)[:,1]
+    , "LogReg": lr_grid.best_estimator_.predict_proba(X_tr)[:,1]
+    , "Gauss": gnb.predict_proba(X_tr)[:,1]
+    , "GaussRat": gnbRat.predict_proba(X_tr)[:,1]
+    , "GaussExp": gnbExp.predict_proba(X_tr)[:,1]
+    , "NuSVM": clf.predict(X_tr)
+})
+
+%%time
+proba_test = pd.DataFrame({
+    "KNN": neigh.predict_proba(X_test)[:,1]
+    , "Tree": tree_grid.best_estimator_.predict_proba(X_test)[:,1]
+    , "Forest": forest_grid.best_estimator_.predict_proba(X_test)[:,1]
+    , "LogReg": lr_grid.best_estimator_.predict_proba(X_test)[:,1]
+    , "Gauss": gnb.predict_proba(X_test)[:,1]
+    , "GaussRat": gnbRat.predict_proba(X_test)[:,1]
+    , "GaussExp": gnbExp.predict_proba(X_test)[:,1]    
+    , "NuSVM": clf.predict(X_test)
+})
+
+from sklearn.metrics import classification_report
+from sklearn import metrics
+
+proba_train.columns
+
+print("Training data")
+print("===========================================")
+print("Tree")
+fpr, tpr, thresholds = metrics.roc_curve(y, proba_train.Tree)
+auc_m= metrics.auc(fpr, tpr)
+print('AUC:', auc_m.round(2))
+print(classification_report(y, tree_grid.best_estimator_.predict(X_tr), target_names=["no good", "good"]))
+print("===========================================")
+print("Forest")
+fpr, tpr, thresholds = metrics.roc_curve(y, proba_train.Forest)
+auc_m= metrics.auc(fpr, tpr)
+print('AUC:', auc_m.round(2))
+print(classification_report(y, forest_grid.best_estimator_.predict(X_tr), target_names=["no good", "good"]))
+print("===========================================")
+print("KNN")
+fpr, tpr, thresholds = metrics.roc_curve(y, proba_train.KNN)
+auc_m= metrics.auc(fpr, tpr)
+print('AUC:', auc_m.round(2))
+print(classification_report(y, neigh.predict(X_tr), target_names=["no good", "good"]))
+print("===========================================")
+print("Gauss")
+fpr, tpr, thresholds = metrics.roc_curve(y, proba_train.Gauss)
+auc_m= metrics.auc(fpr, tpr)
+print('AUC:', auc_m.round(2))
+print(classification_report(y, gnb.predict(X_tr), target_names=["no good", "good"]))
+print("===========================================")
+print("GaussExp")
+fpr, tpr, thresholds = metrics.roc_curve(y, proba_train.GaussExp)
+auc_m= metrics.auc(fpr, tpr)
+print('AUC:', auc_m.round(2))
+print(classification_report(y, gnbExp.predict(X_tr), target_names=["no good", "good"]))
+print("===========================================")
+print("GaussRat")
+fpr, tpr, thresholds = metrics.roc_curve(y, proba_train.GaussRat)
+auc_m= metrics.auc(fpr, tpr)
+print('AUC:', auc_m.round(2))
+print(classification_report(y, gnbRat.predict(X_tr), target_names=["no good", "good"]))
+print("===========================================")
+print("LogReg")
+fpr, tpr, thresholds = metrics.roc_curve(y, proba_train.LogReg)
+auc_m= metrics.auc(fpr, tpr)
+print('AUC:', auc_m.round(2))
+print(classification_report(y, lr_grid.best_estimator_.predict(X_tr), target_names=["no good", "good"]))
+print("===========================================")
+print("NuSVR")
+fpr, tpr, thresholds = metrics.roc_curve(y, proba_train.NuSVM)
+auc_m= metrics.auc(fpr, tpr)
+print('AUC:', auc_m.round(2))
+print(classification_report(y, clf.predict(X_tr)>=0.5, target_names=["no good", "good"]))
+print("===========================================")
+
+
+proba_train
+
+proba_train['label'] = y
+
+proba_train['prob_article'] = df_train.probability_ML
+
+res_factors = ['KNN', 'Tree', 'Forest', 'LogReg', 'Gauss','GaussExp','GaussRat', 'NuSVM', 'prob_article']
+
+proba_train[res_factors].corr()
+
+sns.pairplot(proba_train[res_factors])
+
+
+
+proba_test['prob_article'] = df_test.probability_ML
+
+proba_test[res_factors].corr()
+
+proba_test
+
+sns.pairplot(proba_test[res_factors])
+
+
+
+res = df_test.copy()
+
+res = res.join(proba_test)
+
+res.to_csv('my_res1.csv', sep = ',')
+
+
+fig = go.Figure()
+
+for clf in res_factors:
+    fig.add_trace(go.Scatter(x=res.oral_comprehension,
+                y=res[clf],
+                name=clf,
+                mode = 'markers'
+                ))
+fig.show()
+
+#from scipy.stats import kendalltau
+#from scipy.stats import kendalltau
+
+#res = res.sort_values(by=['prob_article'])
+#res['rank_art'] = [i for i in range(res.shape[0])]
+
+#print('Kendal correlation:')
+#for clf in res_factors:
+#    res = res.sort_values(by=[clf])
+#    res['rank_' + clf] = [i for i in range(res.shape[0])]
+#    coef, p = kendalltau(res['rank_'+ clf], res.rank_a)
+#    print("%s : corr = %f, p-value = %f"%(clf,coef, p))
+
+
+
+res[res_factors].corr ('kendall') 
+
+res[res_factors].corr ('spearman') 
+
+res
+
+
+
+
+
